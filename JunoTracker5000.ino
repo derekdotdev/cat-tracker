@@ -2,49 +2,64 @@
     C Program for Arduino to demonstrate how to collect 'small data' to see how quickly my cat can run.
 
     This example uses two PIR sensors to track:
-  - When my cat's auto feeder begins dispensing
+  - When my cat's auto feeder begins dispensing a meal
   - When my cat arrives at his bowl to eat (he DARTS to the kitchen as soon as he hears it)
 
    Finally, these events are timestamped and saved to an SD card as a CSV for further analysis. ----
 
-   ### Connection with SD card module###
+   ### The Circuit ###
 
-   MISO -> pin 12
+   ### SD Card on Ethernet Shield 2 ###
+   SDO -> pin 11
 
-   MOSI -> pin 11
+   SDI -> pin 12
 
-   SCK -> pin 13
+   CLK -> pin 13
 
-   CS ->pin 4
+   CS -> pin 4
 
-    ###Connection with DS3231####
-    VCC -> 5V
+   ###Connection with DS3231####
+   VCC -> 5V
 
-    Gnd -> Gnd
+   Gnd -> Gnd
 
-    SCL -> pin A5
+   SCL -> pin A5
 
     SDA -> pin A4
 
-     ###Connection with foodSensor PIR###
+    ###Connection with foodSensor PIR (+ LED Indicator)###
+    VCC -> 5V
+    Gnd -> Gnd
+    Signal -> pin 2
 
+    LED(cathode) -> 330Ohm -> GND
+    LED(anode) -> pin 3
 
+    ###Connection with catSensor PIR (+ LED Indicator)###
+    VCC -> 5V
+    Gnd -> Gnd
+    Signal -> pin 6
 
-     ###Connection with catSensor PIR###
+    LED(cathode) -> 330Ohm -> GND
+    LED(anode) -> pin 7
 
+    created 19 May 2022
+    
+    by Derek DiLeo
+
+    This code is in the public domain
 
 */
 
-#include <DS3231.h>  // Library for RTC module (Downloaded from RinkyDink Electronics)
+//#include <DS3231.h>  // Library for RTC module (Downloaded from RinkyDink Electronics)
 
-#include <Wire.h>    // Library for I2C/TWI devices 
+//#include <Wire.h>    // Library for I2C/TWI devices (SDA<data> = A4, SCL<clk> = A5)  
 
-#include <SPI.h>     //Library for SPI communication (Pre-Loaded into Arduino)
+#include <SPI.h>           //Library for SPI communication (Pre-Loaded into Arduino)
+#include <SD.h>           // Library for SD card (Pre-Loaded into Arduino)
+#include <TimeLib.h>       // Library for DateTime
 
-#include <SD.h> // Library for SD card (Pre-Loaded into Arduino)
-
-
-DS3231  rtc(SDA, SCL);        // Init the DS3231 using the hardware interface
+//DS3231  rtc(SDA, SCL);        // Init the DS3231 using the hardware interface
 
 bool foodDispensed = false;    // catSensor only important if this is true
 int foodLED = 3;               // the pin that the foodLED is attached to
@@ -59,10 +74,20 @@ int catSensorVal = 0;          // variable to store the cat sensor status (value
 const int chipSelect = 4;      // SD card CS pin connected to pin 4 of Arduino
 
 // Initialize time variables for SD card writes
-Time foodTimeSD, catTimeSD, differenceTimeSD;
+//Time foodTimeSD, catTimeSD, differenceTimeSD;
 
 // Initialize long to keep track of milliseconds (for more precise splits)
 unsigned long foodTime;
+
+
+/*
+
+  During testing, file will be written to when either sensor is tripped. After testing is completed, only
+  write to SD when cat arrives. This will make creating the bar graph and calculating average time much easier!
+
+*/
+
+
 
 
 /*****************************************************************************************************
@@ -72,19 +97,26 @@ unsigned long foodTime;
     - Explain to the user how to use the program
  *****************************************************************************************************/
 void setup() {
-  Serial.begin(57600);            // initialize serial (USB) connection
+  
+  Serial.begin(9600);            // initialize serial (USB) connection
+  delay(2000);
+  // wait for Serial Monitor to connect. Needed for native USB port boards only:
+  while(!Serial);
 
-  Wire.begin();                  // Start the I2C interface
+  Serial.print(now());
 
+  Serial.println("Initializing SD card...");
+  
   Initialize_SDcard();
 
-  Initialize_RTC();
+  Serial.println("initialization done.");
 
   pinMode(foodLED, OUTPUT);      // initalize foodLED as an output
   pinMode(foodSensor, INPUT);    // initialize foodSensor as an input
   pinMode(catLED, OUTPUT);       // initalize catLED as an output
   pinMode(catSensor, INPUT);     // initialize catSensor as an input
 
+  digitalWrite(foodLED, HIGH);
 }
 
 /*****************************************************************************************************
@@ -105,6 +137,10 @@ void loop() {
     if (foodSensorState == LOW) {
       Serial.println("Motion Detected on Food Sensor!");
       foodDispensed = true;
+
+      // After testing is finished, remove this statement.
+      // Collect time in here and pass into Write_SDcard function!
+
       Write_SDcard("Food Sensor", true);
       foodSensorState = HIGH;                // update foodSensorState to HIGH
     }
@@ -146,27 +182,25 @@ void loop() {
     - Initialize the RTC object
     - Set date, if needed
  *****************************************************************************************************/
-void Initialize_RTC() {
-
-  // Initialize the rtc object
-
-  rtc.begin();
-
-
-  //#### The following lines can be uncommented to set the date and time for the first time###
-
-  rtc.setDOW("Saturday");     // Set Day-of-Week to SUNDAY
-
-  rtc.setTime(10, 46, 45);     // Set the time (HH:mm:ss) (24hr format)
-
-  rtc.setDate(5, 22, 2022);   // Set the date
-
-}
+//void Initialize_RTC() {
+//
+//  rtc.begin();           // Initialize the rtc object
+//
+//
+//  //#### The following lines can be [un]commented to set the date and time###
+//
+//  rtc.setDOW("Saturday");     // Set Day-of-Week to SUNDAY
+//
+//  rtc.setTime(10, 46, 45);     // Set the time (HH:mm:ss) (24hr format)
+//
+//  rtc.setDate(5, 22, 2022);   // Set the date
+//
+//}
 
 /*****************************************************************************************************
    Initialize_SDcard
     - Check if SD card is present and can be initialized (if not, return)
-    - Open a new file on the SD card
+    - Open a new file on the SD card and write first row of excel file
  *****************************************************************************************************/
 void Initialize_SDcard() {
 
@@ -175,8 +209,15 @@ void Initialize_SDcard() {
 
     Serial.println("Card failed, or not present");
 
-    // don't do anything else
-    return;
+    Serial.println("1. is a card inserted?");
+
+    Serial.println("2. is your wiring correct?");
+
+    Serial.println("3. did you change the chipSelect pin to match your shield or module?");
+
+    Serial.println("Note: press reset or reopen this serial monitor after fixing your issue!");
+
+    while (true);
 
   }
 
@@ -189,21 +230,26 @@ void Initialize_SDcard() {
   // if the file is available, write to it:
   if (dataFile) {
 
-    dataFile.println("Date,Sensor,Time,Difference (ms)"); //Write the first row of the excel file
+    dataFile.println("Date,Sensor,Speed(ms)"); //Write the first row of the excel file
 
     dataFile.close();
 
   }
 
+  Serial.println("Initialize_SDcard() complete!");
+
 }
 
 /*****************************************************************************************************
    Write_SDcard
+    - whichSensor is used to indicate if writing data about foodSensor or catSensor
+    - isFood determines whether '0' or catTime-foodTime (in millis()) is written to CSV
     - Open the file on SD (if available)
     - Write date,whichSensor,currentTime & splitTime to CSV
-    - For splitTime, write 0 if isFood, catTime-foodTime if !isFood
  *****************************************************************************************************/
 void Write_SDcard(String whichSensor, bool isFood) {
+
+  time_t t = now();
 
   // open the file. note that only one file can be open at a time,
 
@@ -215,19 +261,22 @@ void Write_SDcard(String whichSensor, bool isFood) {
 
   if (dataFile) {
 
-    dataFile.print(rtc.getDateStr()); //Store date on SD card
+    Serial.println("Write_SDcard called!");
+    
+    dataFile.print(String(year(t))); //Store date on SD card
 
     dataFile.print(","); //Move to next column using a ","
-
+    
 
     dataFile.print(whichSensor); //Store sensor label on SD card
 
     dataFile.print(","); //Move to next column using a ","
 
 
-    dataFile.print(rtc.getTimeStr()); //Store time on SD card
+    dataFile.print(String(hour(t))); //Store time on SD card
 
     dataFile.print(","); //Move to next column using a ","
+
 
     if (isFood && foodDispensed) {
       foodTime = millis();    // capture current time in milliseconds
@@ -236,9 +285,10 @@ void Write_SDcard(String whichSensor, bool isFood) {
 
       dataFile.print(","); //Move to next column using a ","
     } else {
-      //Store time diff (in ms) between foodTime and now to SD card (cat is eating)
-      
-      dataFile.print(String(millis() - foodTime));  
+
+      //Store time diff (in ms) between foodTime and current time to SD card (cat is here)
+
+      dataFile.print(String(millis() - foodTime));
 
       dataFile.print(","); //Move to next column using a ","
 
