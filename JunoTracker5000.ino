@@ -58,6 +58,13 @@ int catSensorVal = 0;          // variable to store the cat sensor status (value
 
 const int chipSelect = 4;      // SD card CS pin connected to pin 4 of Arduino
 
+// Initialize time variables for SD card writes
+Time foodTimeSD, catTimeSD, differenceTimeSD;
+
+// Initialize long to keep track of milliseconds (for more precise splits)
+unsigned long foodTime;
+
+
 /*****************************************************************************************************
    Setup
     - Open Serial and Wire connection
@@ -76,7 +83,7 @@ void setup() {
   pinMode(foodLED, OUTPUT);      // initalize foodLED as an output
   pinMode(foodSensor, INPUT);    // initialize foodSensor as an input
   pinMode(catLED, OUTPUT);       // initalize catLED as an output
-  pinMode(catSensor, INPUT);     // initialize catSensor as an input           
+  pinMode(catSensor, INPUT);     // initialize catSensor as an input
 
 }
 
@@ -87,18 +94,18 @@ void setup() {
     - If catSensor is tripped after foodSensor, write event with timestamp to SD
  *****************************************************************************************************/
 void loop() {
-  
+
   foodSensorVal = digitalRead(foodSensor);   // read foodSensor value
   catSensorVal = digitalRead(catSensor);     // read catSensor value
 
-  if (foodSensorVal == HIGH && !foodDispensed) {               // check if food is being dispensed for first time
-    digitalWrite(foodLED, HIGH);             // turn foodLED ON                    
+  if (foodSensorVal == HIGH && !foodDispensed) {   // check food being dispensed for first time
+    digitalWrite(foodLED, HIGH);             // turn foodLED ON
     delay(100);                              // delay 100 milliseconds
 
     if (foodSensorState == LOW) {
       Serial.println("Motion Detected on Food Sensor!");
-      Write_SDcard("Food Sensor");
       foodDispensed = true;
+      Write_SDcard("Food Sensor", true);
       foodSensorState = HIGH;                // update foodSensorState to HIGH
     }
   }
@@ -119,7 +126,7 @@ void loop() {
 
     if (catSensorState == LOW) {
       Serial.println("Motion Detected on Cat Sensor after Food Dispensed!");
-      Write_SDcard("Cat Sensor");
+      Write_SDcard("Cat Sensor", false);
       catSensorState = HIGH;               // update catSensorState to HIGH
     }
   } else {
@@ -173,16 +180,16 @@ void Initialize_SDcard() {
 
   }
 
-  // open the file. note that only one file can be open at a time,
+  // open the file. (note: only one file can be open at a time,
 
-  // so you have to close this one before opening another.
+  // so you have to close this one before opening another).
 
   File dataFile = SD.open("LoggerCD.txt", FILE_WRITE);
 
   // if the file is available, write to it:
   if (dataFile) {
 
-    dataFile.println("Date,Time,Sensor"); //Write the first row of the excel file
+    dataFile.println("Date,Sensor,Time,Difference (ms)"); //Write the first row of the excel file
 
     dataFile.close();
 
@@ -192,17 +199,17 @@ void Initialize_SDcard() {
 
 /*****************************************************************************************************
    Write_SDcard
-    - Open the file (if available)
-    - Open a new file on the SD card
+    - Open the file on SD (if available)
+    - Write date,whichSensor,currentTime & splitTime to CSV
+    - For splitTime, write 0 if isFood, catTime-foodTime if !isFood
  *****************************************************************************************************/
-void Write_SDcard(String whichSensor) {
+void Write_SDcard(String whichSensor, bool isFood) {
 
-    // open the file. note that only one file can be open at a time,
+  // open the file. note that only one file can be open at a time,
 
   // so you have to close this one before opening another.
 
   File dataFile = SD.open("LoggerCD.txt", FILE_WRITE);
-
 
   // if the file is available, write to it:
 
@@ -213,15 +220,29 @@ void Write_SDcard(String whichSensor) {
     dataFile.print(","); //Move to next column using a ","
 
 
+    dataFile.print(whichSensor); //Store sensor label on SD card
+
+    dataFile.print(","); //Move to next column using a ","
+
+
     dataFile.print(rtc.getTimeStr()); //Store time on SD card
 
     dataFile.print(","); //Move to next column using a ","
 
+    if (isFood && foodDispensed) {
+      foodTime = millis();    // capture current time in milliseconds
 
-    dataFile.print(whichSensor); //Store sensor label on SD card
+      dataFile.print("0"); //Store difference as 0 on SD card (cat has not arrived)
 
-    dataFile.print(","); //Move to next column using a ","
-    
+      dataFile.print(","); //Move to next column using a ","
+    } else {
+      //Store time diff (in ms) between foodTime and now to SD card (cat is eating)
+      
+      dataFile.print(String(millis() - foodTime));  
+
+      dataFile.print(","); //Move to next column using a ","
+
+    }
 
     dataFile.println(); //End of Row move to next row
 
@@ -231,6 +252,6 @@ void Write_SDcard(String whichSensor) {
 
   else
 
-  Serial.println("OOPS!! SD card writing failed");
+    Serial.println("OOPS!! SD card writing failed...\nFile not available!");
 
 }
