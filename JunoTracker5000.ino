@@ -9,6 +9,10 @@
 
     ### - The Circuit - ###
 
+    ### Power Indicator LED (optional) ###
+    LED(cathode) -> 330Ohm -> GND 
+    LED(anode) -> pin 9 [purple]
+
     ### SD Card (built into Arduino Ethernet Shield 2) ###
     SDO -> pin 11
 
