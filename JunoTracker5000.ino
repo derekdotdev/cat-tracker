@@ -55,7 +55,7 @@
 #include <DS3231.h>        // Library for RTC module (Downloaded from RinkyDink Electronics)
 #include <SPI.h>           // Library for SPI communication (Pre-Loaded into Arduino)
 #include <SD.h>            // Library for SD card (Pre-Loaded into Arduino)
-#include <TimeLib.h>       // Library for DateTime
+//#include <TimeLib.h>       // Library for DateTime
 
 DS3231  rtc(SDA, SCL);        // Init the DS3231 using the hardware interface
 
@@ -92,11 +92,16 @@ unsigned long foodTime;
 void setup() {
 
   Serial.begin(9600);            // initialize serial (USB) connection
-  delay(2000);
+  
+  delay(2000);                 
   // wait for Serial Monitor to connect. Needed for native USB port boards only:
-  while (!Serial);
+//  while (!Serial);
 
-  Serial.print(now());
+  Serial.print("Initializing RTC...");
+  
+  Initialize_RTC();
+
+  delay(2000);
 
   Serial.println("Initializing SD card...");
 
@@ -108,7 +113,10 @@ void setup() {
   pinMode(foodSensor, INPUT);    // initialize foodSensor as an input
   pinMode(catLED, OUTPUT);       // initalize catLED as an output
   pinMode(catSensor, INPUT);     // initialize catSensor as an input
-  
+
+  Serial.println("Calling timeIsValid() from setup()");
+  timeIsValid();
+
 }
 
 /*****************************************************************************************************
@@ -118,8 +126,10 @@ void setup() {
     - If catSensor is tripped after foodSensor, write event with timestamp to SD
  *****************************************************************************************************/
 
-// TODO: Figure out how to avoid repeat sensor trips. We only want ONE per meal. (timer?)
-// TODO: Pass foodTime into Write_SDcard
+// TODO: Figure out how to avoid false and repeat sensor trips. 
+// We only want ONE trigger per meal and do not want Roomba or Juno licking bowl(yes, he does that) to 
+// trigger a false sensor event. (timer?)
+// TODO: Set up and test with actual food dispenses
 void loop() {
 
   foodSensorVal = digitalRead(foodSensor);   // read foodSensor value
@@ -130,24 +140,20 @@ void loop() {
     delay(100);                              // delay 100 milliseconds
 
     if (foodSensorState == LOW) {
-      Serial.println("Motion Detected on Food Sensor!");
+//      Serial.println("Motion Detected on Food Sensor!");
       
       foodDispensed = true;
-
-      // After testing is finished, remove this statement.
-      // Collect time in here and pass into Write_SDcard function!
-
-      //foodTime = millis();
-      Write_SDcard("Food Sensor", true);  // REMOVE ME
+      
+      foodTime = millis();                  // Capture current time (used later for diff)
+      
       foodSensorState = HIGH;                // update foodSensorState to HIGH
     }
-  }
-  else {
+  } else {
     digitalWrite(foodLED, LOW);            // turn foodLED OFF
-    delay(200);                            // delay 200 milliseconds
+    delay(100);                            // delay 200 milliseconds
 
     if (foodSensorState == HIGH) {
-      Serial.println("Food Sensor Motion stopped!");
+//      Serial.println("Food Sensor Motion stopped!");
       foodSensorState = LOW;               // update foodSensorState to LOW
     }
   }
@@ -158,21 +164,50 @@ void loop() {
     delay(100);                            // delay 100 milliseconds
 
     if (catSensorState == LOW) {
-      Serial.println("Motion Detected on Cat Sensor after Food Dispensed!");
-      Write_SDcard("Cat Sensor", false);
+      
+//      Serial.println("Motion Detected on Cat Sensor after Food Dispensed!");
+      
+      Write_SDcard((millis() - foodTime));  // Write split time SD 
+      
       catSensorState = HIGH;               // update catSensorState to HIGH
     }
   } else {
     digitalWrite(catLED, LOW);             // turn catLED OFF
-    delay(200);                            // delay 200 milliseconds
+    delay(100);                            // delay 200 milliseconds
 
     if (catSensorState == HIGH) {
-      Serial.println("Cat Sensor Motion stopped!");
+//      Serial.println("Cat Sensor Motion stopped!");
       catSensorState = LOW;                // update catSensorState to LOW
       foodDispensed = false;               // reset foodDispensed
     }
   }
 }
+
+/*****************************************************************************************************
+   timeIsValid
+    - This function is used to prevent false data entry by checking current time against
+        set times when his food is dispensed (6:30 & 18:00)
+    - Reasons: Juno likes to lick his bowl when he's hungry (all the time) 
+        and his food bowl is near the Roomba dock.
+ *****************************************************************************************************/
+bool timeIsValid() {
+
+  Time t = rtc.getTime();
+  int currentHour = t.hour;
+  
+  Serial.println("Current time: ");
+  Serial.println(t.hour);
+ 
+   if((currentHour > 6 && currentHour < 7) || (currentHour > 18 && currentHour < 19)) {
+   Serial.println("Current time == 10!");
+    return true;
+   } else {
+    Serial.println("Current time != 10");
+    return false;
+   } 
+  
+}
+
 
 /*****************************************************************************************************
    Initialize_RTC
@@ -184,13 +219,20 @@ void Initialize_RTC() {
   rtc.begin();           // Initialize the rtc object
 
   //#### The following lines can be [un]commented to set the current date and time###
+ 
+  rtc.setTime(12, 30, 45);     // Set the time (HH:mm:ss) (24hr format)
 
-  rtc.setDate(5, 22, 2022);   // Set the date
+  Serial.print("     Time read from rtc: ");
+  Serial.print(rtc.getTimeStr());
+
+
+  Serial.print("\nSetting date to 5/22/2022: ");
   
-  rtc.setDOW("Saturday");     // Set Day-of-Week
+  rtc.setDate(22, 05, 2022);   // Set the date to May 5th, 2022
 
-  rtc.setTime(10, 46, 45);     // Set the time (HH:mm:ss) (24hr format)
-
+  Serial.print("   Date read from rtc: ");
+  Serial.print(rtc.getDateStr());
+  Serial.println(" ");
 }
 
 /*****************************************************************************************************
@@ -226,8 +268,7 @@ void Initialize_SDcard() {
   // if the file is available, write to it:
   if (dataFile) {
 
-//    dataFile.println("Date,Time,Cat Arrival Time(ms)"); //Write the first row of the excel file
-    dataFile.println("Date,Time,Sensor,Speed Split(ms)"); //Write the first row of the excel file
+    dataFile.println("Date,Time,Cat Response Time(ms)"); //Write the first row of the excel file
 
     dataFile.close();
 
@@ -245,10 +286,7 @@ void Initialize_SDcard() {
     - Write date,whichSensor,currentTime & splitTime to CSV
  *****************************************************************************************************/
 // void Write_SDcard(long foodDropTime) {
-void Write_SDcard(String whichSensor, bool isFood) {
-
-  
-  time_t t = now();
+void Write_SDcard(unsigned long timeDiff) {
 
   // open the file. note that only one file can be open at a time,
 
@@ -260,11 +298,7 @@ void Write_SDcard(String whichSensor, bool isFood) {
 
   if (dataFile) {
 
-    if (isFood) {
-      Serial.println("Food drop sensor caused Write_SDcard call!");  
-    } else {
-      Serial.println("Cat sensor caused Write_SDcard call!");  
-    }
+    Serial.println("Cat sensor caused Write_SDcard call!");  
     
     dataFile.print(rtc.getDateStr()); //Store date on SD card
 
@@ -275,30 +309,11 @@ void Write_SDcard(String whichSensor, bool isFood) {
 
     dataFile.print(","); //Move to next column using a ","
 
-    
-    dataFile.print(whichSensor); //Store sensor label on SD card (Remove me after testing)
 
-    dataFile.print(","); //Move to next column using a "," (Remove me after testing)
+    dataFile.print(String(timeDiff));    // Store food dispense time - cat arrival time to SD card
 
+    dataFile.print(","); //Move to next column using a ","
 
-    // After testing, this can be removed. Only cat sensor data will be written
-    // foodTime will be passed into function as an argument (foodDropTime)
-    if (isFood && foodDispensed) {
-      foodTime = millis();    // capture current time in milliseconds
-
-      dataFile.print("0"); //Store difference as 0 on SD card (cat has not arrived)
-
-      dataFile.print(","); //Move to next column using a ","
-    } else {
-
-      // Calculate time diff (in ms) between food dispensing (foodTime) and
-      // cat arriving (currentTime) and write to SD card
-
-      dataFile.print(String(millis() - foodTime));
-
-      dataFile.print(","); //Move to next column using a ","
-
-    }
 
     dataFile.println(); //End of Row move to next row
 
