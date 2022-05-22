@@ -214,7 +214,7 @@ void Initialize_RTC() {
 
   //#### The following lines can be [un]commented to set the current date and time###
  
-  rtc.setTime(6, 30, 45);     // Set the time (HH:mm:ss) (24hr format)
+  rtc.setTime(14, 50, 00);     // Set the time (HH:mm:ss) (24hr format)
 
   Serial.print("     Time read from rtc: ");
   Serial.print(rtc.getTimeStr());
