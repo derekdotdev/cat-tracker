@@ -23,25 +23,25 @@
 
     Gnd -> Gnd
 
-    SCL -> pin A5
+    SCL -> pin A5 (black)
 
-    SDA -> pin A4 (white
+    SDA -> pin A4 (white)
 
     ###Connection with foodSensor PIR (+ LED Indicator)###
-    VCC -> 5V
-    Gnd -> Gnd
-    Signal -> pin 2
+    VCC -> 5V [red]
+    Gnd -> Gnd [green]
+    Signal -> pin 2 [orange]
 
-    LED(cathode) -> 330Ohm -> GND
-    LED(anode) -> pin 3
+    LED(cathode) -> 330Ohm -> GND 
+    LED(anode) -> pin 3 [orange]
 
     ###Connection with catSensor PIR SR602 (+ LED Indicator)###
-    VCC -> 5V
-    Gnd -> Gnd
-    Signal -> pin 6
+    VCC -> 5V [yellow]
+    Gnd -> Gnd [brown]
+    Signal -> pin 6 [blue]
 
     LED(cathode) -> 330Ohm -> GND
-    LED(anode) -> pin 7
+    LED(anode) -> pin 7 [blue]
 
     created 19 May 2022
 
@@ -50,12 +50,10 @@
     This code is in the public domain
 
 */
-//#include <Wire.h>        // Library for I2C/TWI devices (SDA<data> = A4, SCL<clk> = A5)
 
 #include <DS3231.h>        // Library for RTC module (Downloaded from RinkyDink Electronics)
 #include <SPI.h>           // Library for SPI communication (Pre-Loaded into Arduino)
 #include <SD.h>            // Library for SD card (Pre-Loaded into Arduino)
-//#include <TimeLib.h>       // Library for DateTime
 
 DS3231  rtc(SDA, SCL);        // Init the DS3231 using the hardware interface
 
@@ -75,19 +73,10 @@ int catSensorVal = 0;          // variable to store the cat sensor status (value
 // subracted from catSensor time to determine cat's reaction speed
 unsigned long foodTime;        
 
-/*
-
-  During testing, file will be written to when either sensor is tripped. After testing is completed, only
-  write to SD when cat arrives. This will make creating the bar graph and calculating average time much easier!
-
-*/
-
-
 /*****************************************************************************************************
    Setup
-    - Open Serial and Wire connection
+    - Open Serial connection
     - Set input/output pins
-    - Explain to the user how to use the program
  *****************************************************************************************************/
 void setup() {
 
@@ -95,7 +84,7 @@ void setup() {
   
   delay(2000);                 
   // wait for Serial Monitor to connect. Needed for native USB port boards only:
-//  while (!Serial);
+  while (!Serial);
 
   Serial.print("Initializing RTC...");
   
@@ -109,14 +98,17 @@ void setup() {
 
   Serial.println("initialization done.");
 
+  pinMode(9, OUTPUT);            // initialize program started LED 
+  digitalWrite(9, HIGH);         // indicate setup() running 
+  
   pinMode(foodLED, OUTPUT);      // initalize foodLED as an output
   pinMode(foodSensor, INPUT);    // initialize foodSensor as an input
   pinMode(catLED, OUTPUT);       // initalize catLED as an output
   pinMode(catSensor, INPUT);     // initialize catSensor as an input
 
-  Serial.println("Calling timeIsValid() from setup()");
-  timeIsValid();
-
+  delay(4000);                   // wait 4 seconds
+  digitalWrite(9, LOW);          // turn off LED to indicate setup() done
+  
 }
 
 /*****************************************************************************************************
@@ -135,12 +127,12 @@ void loop() {
   foodSensorVal = digitalRead(foodSensor);   // read foodSensor value
   catSensorVal = digitalRead(catSensor);     // read catSensor value
 
-  if (foodSensorVal == HIGH && !foodDispensed) {   // check food being dispensed for first time
+  if (foodSensorVal == HIGH && !foodDispensed && timeIsValid()) {   // check food being dispensed for first time
     digitalWrite(foodLED, HIGH);             // turn foodLED ON
     delay(100);                              // delay 100 milliseconds
 
     if (foodSensorState == LOW) {
-//      Serial.println("Motion Detected on Food Sensor!");
+      Serial.println("Motion Detected on Food Sensor!");
       
       foodDispensed = true;
       
@@ -150,6 +142,7 @@ void loop() {
     }
   } else {
     digitalWrite(foodLED, LOW);            // turn foodLED OFF
+    
     delay(100);                            // delay 200 milliseconds
 
     if (foodSensorState == HIGH) {
@@ -158,14 +151,12 @@ void loop() {
     }
   }
 
-  if (catSensorVal == HIGH
-      && foodDispensed) {                  // check catSensor motion and food dispensed
+  if (catSensorVal == HIGH && foodDispensed) {                  // check catSensor motion and food dispensed
     digitalWrite(catLED, HIGH);            // turn catLED ON
+    
     delay(100);                            // delay 100 milliseconds
 
     if (catSensorState == LOW) {
-      
-//      Serial.println("Motion Detected on Cat Sensor after Food Dispensed!");
       
       Write_SDcard((millis() - foodTime));  // Write split time SD 
       
@@ -173,12 +164,16 @@ void loop() {
     }
   } else {
     digitalWrite(catLED, LOW);             // turn catLED OFF
+    
     delay(100);                            // delay 200 milliseconds
 
     if (catSensorState == HIGH) {
-//      Serial.println("Cat Sensor Motion stopped!");
       catSensorState = LOW;                // update catSensorState to LOW
+      
       foodDispensed = false;               // reset foodDispensed
+      
+      delay(39600000);                     // Wait pause program for 11 hours
+      
     }
   }
 }
@@ -186,23 +181,22 @@ void loop() {
 /*****************************************************************************************************
    timeIsValid
     - This function is used to prevent false data entry by checking current time against
-        set times when his food is dispensed (6:30 & 18:00)
+        set times when his food is dispensed (6:15 & 18:15)
     - Reasons: Juno likes to lick his bowl when he's hungry (all the time) 
         and his food bowl is near the Roomba dock.
  *****************************************************************************************************/
 bool timeIsValid() {
-
-  Time t = rtc.getTime();
-  int currentHour = t.hour;
   
-  Serial.println("Current time: ");
-  Serial.println(t.hour);
+  int currentHour = rtc.getTime().hour;   // Get current hour
+  char s [80];       // create character array for sprintf statements below
  
-   if((currentHour > 6 && currentHour < 7) || (currentHour > 18 && currentHour < 19)) {
-   Serial.println("Current time == 10!");
+   if(currentHour == 6 || currentHour == 18) {
+   sprintf(s, "Current time == %d which means it is feeding time!", currentHour);
+   Serial.println(s);
     return true;
    } else {
-    Serial.println("Current time != 10");
+    sprintf(s, "Current time == %d which means it is NOT feeding time!", currentHour);
+    Serial.println(s);
     return false;
    } 
   
@@ -220,7 +214,7 @@ void Initialize_RTC() {
 
   //#### The following lines can be [un]commented to set the current date and time###
  
-  rtc.setTime(12, 30, 45);     // Set the time (HH:mm:ss) (24hr format)
+  rtc.setTime(6, 30, 45);     // Set the time (HH:mm:ss) (24hr format)
 
   Serial.print("     Time read from rtc: ");
   Serial.print(rtc.getTimeStr());
