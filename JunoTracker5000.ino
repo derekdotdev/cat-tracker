@@ -198,7 +198,7 @@ void loop() {
 bool timeIsValid() {
   
   int hourNow = rtc.getTime().hour;         // Get current hour
-  int minuteNow = rtc.getTime().minute;     // Get current minute 
+  int minuteNow = rtc.getTime().min;     // Get current minute 
  
    if((hourNow == 6  || hourNow == 18) && (minuteNow >= 10 && minuteNow <= 20)) {
     digitalWrite(9, HIGH);           // green LED on (sensors are armed)
