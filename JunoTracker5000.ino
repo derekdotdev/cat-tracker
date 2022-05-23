@@ -104,7 +104,9 @@ void setup() {
 
   Serial.println("initialization done.");
 
-  pinMode(9, OUTPUT);            // initialize program started LED 
+  // initialize program started / sensors enabled LED
+  pinMode(9, OUTPUT);
+  pinMode(8, OUTPUT);            // initialize sensors disabled LED
   digitalWrite(9, HIGH);         // indicate setup() running 
   
   pinMode(foodLED, OUTPUT);      // initalize foodLED as an output
