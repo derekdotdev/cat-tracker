@@ -1,4 +1,4 @@
-/* 
+/*
     C Program for Arduino to demonstrate how to collect 'small data' to see how quickly my cat can run.
 
     This example uses two PIR sensors to track:
@@ -11,14 +11,14 @@
 
     ### Multi-purpose RGB LED ###
 
-    * (cathode)     ->  330 Ohm -> GND
-    * (Red anode)   ->  pin 8 [Sensors Disabled]
-    * (Green anode) ->  pin 9 [Power ON & Sensors Enabled]
-    * (Blue anode)  ->  pin 7 [Cat Sensor Indicator]
+      (cathode)     ->  330 Ohm -> GND
+      (Red anode)   ->  pin 8 [Sensors Disabled]
+      (Green anode) ->  pin 9 [Power ON & Sensors Enabled]
+      (Blue anode)  ->  pin 7 [Cat Sensor Indicator]
 
     ### Food Sensor LED ###
-    * (cathode)     ->  330 Ohm -> GND
-    * (anode)       ->  pin 3 [Food Sensor Indicator]
+      (cathode)     ->  330 Ohm -> GND
+      (anode)       ->  pin 3 [Food Sensor Indicator]
 
     ### SD Card (built into Arduino Ethernet Shield 2) ###
     SDO -> pin 11
@@ -77,7 +77,7 @@ int catSensorVal = 0;          // variable to store the cat sensor status (value
 
 // variable to store millis() when food drops and is later
 // subracted from catSensor time to determine cat's reaction speed
-unsigned long foodTime;        
+unsigned long foodTime;
 
 /*****************************************************************************************************
    Setup
@@ -87,13 +87,13 @@ unsigned long foodTime;
 void setup() {
 
   Serial.begin(9600);            // initialize serial (USB) connection
-  
-  delay(2000);                 
+
+  delay(2000);
   // wait for Serial Monitor to connect. Needed for native USB port boards only:
   while (!Serial);
 
   Serial.print("Initializing RTC...");
-  
+
   Initialize_RTC();
 
   delay(2000);
@@ -107,8 +107,8 @@ void setup() {
   // initialize program started / sensors enabled LED
   pinMode(9, OUTPUT);
   pinMode(8, OUTPUT);            // initialize sensors disabled LED
-  digitalWrite(9, HIGH);         // indicate setup() running 
-  
+  digitalWrite(9, HIGH);         // indicate setup() running
+
   pinMode(foodLED, OUTPUT);      // initalize foodLED as an output
   pinMode(foodSensor, INPUT);    // initialize foodSensor as an input
   pinMode(catLED, OUTPUT);       // initalize catLED as an output
@@ -116,7 +116,8 @@ void setup() {
 
   delay(4000);                   // wait 4 seconds
   digitalWrite(9, LOW);          // turn off LED to indicate setup() done
-  
+
+
 }
 
 /*****************************************************************************************************
@@ -126,8 +127,8 @@ void setup() {
     - If catSensor is tripped after foodSensor, write event with timestamp to SD
  *****************************************************************************************************/
 
-// TODO: Figure out how to avoid false and repeat sensor trips. 
-// We only want ONE trigger per meal and do not want Roomba or Juno licking bowl(yes, he does that) to 
+// TODO: Figure out how to avoid false and repeat sensor trips.
+// We only want ONE trigger per meal and do not want Roomba or Juno licking bowl(yes, he does that) to
 // trigger a false sensor event. (timer?)
 // TODO: Set up and test with actual food dispenses
 void loop() {
@@ -135,87 +136,100 @@ void loop() {
   foodSensorVal = digitalRead(foodSensor);   // read foodSensor value
   catSensorVal = digitalRead(catSensor);     // read catSensor value
 
-  if (foodSensorVal == HIGH && !foodDispensed && timeIsValid()) {   // check food being dispensed for first time
-    // turn off sensor indicator LEDs so foodLED and catLED are more pronounced
-    digitalWrite(9, LOW);                    
-    digitalWrite(8, LOW);
-    
-    digitalWrite(foodLED, HIGH);             // turn foodLED ON
-    delay(100);                              // delay 100 milliseconds
+  if (timeIsValid()) {
+    // Indicate within feeding window
+    digitalWrite(9, HIGH);  // GREEN
+    digitalWrite(8, LOW);   // RED
 
-    if (foodSensorState == LOW) {
-      Serial.println("Motion Detected on Food Sensor!");
-      
-      foodDispensed = true;
-      
-      foodTime = millis();                  // Capture current time (used later for diff)
-      
-      foodSensorState = HIGH;                // update foodSensorState to HIGH
+    if (foodSensorVal == HIGH && !foodDispensed) {   // check food being dispensed for first time
+      // turn off sensor indicator LEDs so foodLED and catLED are more pronounced
+      digitalWrite(9, LOW);
+      digitalWrite(8, LOW);
+
+      digitalWrite(foodLED, HIGH);             // turn foodLED ON
+      delay(100);                              // delay 100 milliseconds
+
+      if (foodSensorState == LOW) {
+        Serial.println("Motion Detected on Food Sensor!");
+
+        foodDispensed = true;
+
+        foodTime = millis();                  // Capture current time (used later for diff)
+
+        foodSensorState = HIGH;                // update foodSensorState to HIGH
+      }
+    } else {
+      digitalWrite(foodLED, LOW);            // turn foodLED OFF
+
+      delay(100);                            // delay 200 milliseconds
+
+      if (foodSensorState == HIGH) {
+        //      Serial.println("Food Sensor Motion stopped!");
+        foodSensorState = LOW;               // update foodSensorState to LOW
+      }
     }
+
+    // check catSensor motion and food dispensed
+    if (catSensorVal == HIGH && foodDispensed) {
+      digitalWrite(catLED, HIGH);            // turn catLED ON
+
+      delay(100);                            // delay 100 milliseconds
+
+      if (catSensorState == LOW) {
+
+        Write_SDcard((millis() - foodTime));  // Write split time SD
+
+        catSensorState = HIGH;               // update catSensorState to HIGH
+      }
+    } else {
+      digitalWrite(catLED, LOW);             // turn catLED OFF
+
+      delay(100);                            // delay 200 milliseconds
+
+      if (catSensorState == HIGH) {
+        catSensorState = LOW;                // update catSensorState to LOW
+
+        foodDispensed = false;               // reset foodDispensed
+
+        digitalWrite(8, HIGH);               // Set RED LED to HIGH to indicate sensors disabled
+
+        // Pause program for 30 minutes to avoid multiple writes
+        delay(1800000);
+
+      }
+      
+    }
+
   } else {
-    digitalWrite(foodLED, LOW);            // turn foodLED OFF
-    
-    delay(100);                            // delay 200 milliseconds
+    digitalWrite(9, LOW);   // GREEN
+    digitalWrite(8, HIGH);  // RED
 
-    if (foodSensorState == HIGH) {
-//      Serial.println("Food Sensor Motion stopped!");
-      foodSensorState = LOW;               // update foodSensorState to LOW
-    }
   }
 
-  if (catSensorVal == HIGH && foodDispensed) {                  // check catSensor motion and food dispensed
-    digitalWrite(catLED, HIGH);            // turn catLED ON
-    
-    delay(100);                            // delay 100 milliseconds
-
-    if (catSensorState == LOW) {
-      
-      Write_SDcard((millis() - foodTime));  // Write split time SD 
-      
-      catSensorState = HIGH;               // update catSensorState to HIGH
-    }
-  } else {
-    digitalWrite(catLED, LOW);             // turn catLED OFF
-    
-    delay(100);                            // delay 200 milliseconds
-
-    if (catSensorState == HIGH) {
-      catSensorState = LOW;                // update catSensorState to LOW
-      
-      foodDispensed = false;               // reset foodDispensed
-      
-      delay(39600000);                     // Wait pause program for 11 hours
-      
-    }
-  }
 }
 
 /*****************************************************************************************************
    timeIsValid
     - This function is used to prevent false data entry by checking current time against
         set times when his food is dispensed (6:15 & 18:15)
-    - Reasons: Juno likes to lick his bowl when he's hungry (all the time) 
+    - Reasons: Juno likes to lick his bowl when he's hungry (all the time)
         and his food bowl is near the Roomba dock.
  *****************************************************************************************************/
 bool timeIsValid() {
-  
+
   int hourNow = rtc.getTime().hour;         // Get current hour
-  int minuteNow = rtc.getTime().min;     // Get current minute 
- 
-   if((hourNow == 6  || hourNow == 18) && (minuteNow >= 10 && minuteNow <= 20)) {
-    digitalWrite(9, HIGH);           // green LED on (sensors are armed)
-    
-    digitalWrite(8, LOW);            // red LED off (sensors are armed)
-    
+  int minuteNow = rtc.getTime().min;        // Get current minute
+
+  if ((hourNow == 6  || hourNow == 18) && (minuteNow >= 10 && minuteNow <= 20)) {
+
     return true;
-   } else {
-    digitalWrite(9, LOW);         // green LED off (sensors are not armed)
-    
-    digitalWrite(8, HIGH);        // red LED on (sensors are not armed)
+
+  } else {
 
     return false;
-   } 
-  
+
+  }
+
 }
 
 
@@ -229,7 +243,7 @@ void Initialize_RTC() {
   rtc.begin();           // Initialize the rtc object
 
   //#### The following lines can be [un]commented to set the current date and time###
- 
+
   rtc.setTime(11, 30, 00);     // Set the time (HH:mm:ss) (24hr format)
 
   Serial.print("     Time read from rtc: ");
@@ -237,7 +251,7 @@ void Initialize_RTC() {
 
 
   Serial.print("\nSetting date to 5/23/2022: ");
-  
+
   rtc.setDate(23, 05, 2022);   // Set the date to May 5th, 2022
 
   Serial.print("   Date read from rtc: ");
@@ -308,8 +322,8 @@ void Write_SDcard(unsigned long timeDiff) {
 
   if (dataFile) {
 
-    Serial.println("Cat sensor caused Write_SDcard call!");  
-    
+    Serial.println("Cat sensor caused Write_SDcard call!");
+
     dataFile.print(rtc.getDateStr()); //Store date on SD card
 
     dataFile.print(","); //Move to next column using a ","
