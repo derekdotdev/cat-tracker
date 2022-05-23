@@ -9,9 +9,16 @@
 
     ### - The Circuit - ###
 
-    ### Power Indicator LED (optional) ###
-    LED(cathode) -> 330Ohm -> GND 
-    LED(anode) -> pin 9 [purple]
+    ### Multi-purpose RGB LED ###
+
+    * (cathode)     ->  330 Ohm -> GND
+    * (Red anode)   ->  pin 8 [Sensors Disabled]
+    * (Green anode) ->  pin 9 [Power ON & Sensors Enabled]
+    * (Blue anode)  ->  pin 7 [Cat Sensor Indicator]
+
+    ### Food Sensor LED ###
+    * (cathode)     ->  330 Ohm -> GND
+    * (anode)       ->  pin 3 [Food Sensor Indicator]
 
     ### SD Card (built into Arduino Ethernet Shield 2) ###
     SDO -> pin 11
@@ -22,32 +29,27 @@
 
     CS -> pin 4
 
-    ###Connection with DS3231####
+    ### DS3231 Real Time Clock (RTC) Module ####
     VCC -> 5V
 
     Gnd -> Gnd
 
-    SCL -> pin A5 (black)
+    SCL -> pin A5
 
-    SDA -> pin A4 (white)
+    SDA -> pin A4
 
-    ###Connection with foodSensor PIR (+ LED Indicator)###
-    VCC -> 5V [red]
-    Gnd -> Gnd [green]
-    Signal -> pin 2 [orange]
+    ### PIR SR602 Sensor (foodSensor) ###
+    VCC -> 5V
+    Gnd -> Gnd
+    Signal -> pin 2
 
-    LED(cathode) -> 330Ohm -> GND 
-    LED(anode) -> pin 3 [orange]
+    ### PIR SR602 Sensor (catSensor) ###
+    VCC -> 5V
+    Gnd -> Gnd
+    Signal -> pin 6
 
-    ###Connection with catSensor PIR SR602 (+ LED Indicator)###
-    VCC -> 5V [yellow]
-    Gnd -> Gnd [brown]
-    Signal -> pin 6 [blue]
-
-    LED(cathode) -> 330Ohm -> GND
-    LED(anode) -> pin 7 [blue]
-
-    created 19 May 2022
+    Imagined: 16 May 2022
+    Created:  19 May 2022
 
     by Derek DiLeo
 
@@ -132,6 +134,10 @@ void loop() {
   catSensorVal = digitalRead(catSensor);     // read catSensor value
 
   if (foodSensorVal == HIGH && !foodDispensed && timeIsValid()) {   // check food being dispensed for first time
+    // turn off sensor indicator LEDs so foodLED and catLED are more pronounced
+    digitalWrite(9, LOW);                    
+    digitalWrite(8, LOW);
+    
     digitalWrite(foodLED, HIGH);             // turn foodLED ON
     delay(100);                              // delay 100 milliseconds
 
@@ -191,16 +197,20 @@ void loop() {
  *****************************************************************************************************/
 bool timeIsValid() {
   
-  int currentHour = rtc.getTime().hour;   // Get current hour
-  char s [80];       // create character array for sprintf statements below
+  int hourNow = rtc.getTime().hour;         // Get current hour
+  int minuteNow = rtc.getTime().minute;     // Get current minute 
  
-   if(currentHour == 6 || currentHour == 18) {
-   sprintf(s, "Current time == %d which means it is feeding time!", currentHour);
-   Serial.println(s);
+   if((hourNow == 6  || hourNow == 18) && (minuteNow >= 10 && minuteNow <= 20)) {
+    digitalWrite(9, HIGH);           // green LED on (sensors are armed)
+    
+    digitalWrite(8, LOW);            // red LED off (sensors are armed)
+    
     return true;
    } else {
-    sprintf(s, "Current time == %d which means it is NOT feeding time!", currentHour);
-    Serial.println(s);
+    digitalWrite(9, LOW);         // green LED off (sensors are not armed)
+    
+    digitalWrite(8, HIGH);        // red LED on (sensors are not armed)
+
     return false;
    } 
   
@@ -218,15 +228,15 @@ void Initialize_RTC() {
 
   //#### The following lines can be [un]commented to set the current date and time###
  
-  rtc.setTime(14, 50, 00);     // Set the time (HH:mm:ss) (24hr format)
+  rtc.setTime(11, 30, 00);     // Set the time (HH:mm:ss) (24hr format)
 
   Serial.print("     Time read from rtc: ");
   Serial.print(rtc.getTimeStr());
 
 
-  Serial.print("\nSetting date to 5/22/2022: ");
+  Serial.print("\nSetting date to 5/23/2022: ");
   
-  rtc.setDate(22, 05, 2022);   // Set the date to May 5th, 2022
+  rtc.setDate(23, 05, 2022);   // Set the date to May 5th, 2022
 
   Serial.print("   Date read from rtc: ");
   Serial.print(rtc.getDateStr());
