@@ -22,11 +22,8 @@
 
     ### SD Card (built into Arduino Ethernet Shield 2) ###
     SDO -> pin 11
-
     SDI -> pin 12
-
     CLK -> pin 13
-
     CS -> pin 4
 
     ### DS3231 Real Time Clock (RTC) Module ####
@@ -38,10 +35,10 @@
 
     SDA -> pin A4
 
-    ### PIR SR602 Sensor (foodSensor) ###
+    ### FainWan AVR PIC Sound Sensor (foodSensor) ###
     VCC -> 5V
-    Gnd -> Gnd
-    Signal -> pin 2
+    Gnd -> GND
+    Dout -> pin 2
 
     ### PIR SR602 Sensor (catSensor) ###
     VCC -> 5V
@@ -136,64 +133,70 @@ void loop() {
   foodSensorVal = digitalRead(foodSensor);   // read foodSensor value
   catSensorVal = digitalRead(catSensor);     // read catSensor value
 
-  if (timeIsValid()) {
-    // Indicate within feeding window
-    digitalWrite(9, HIGH);  // GREEN
-    digitalWrite(8, LOW);   // RED
+  if (feedingWindow()) {
+    // Indicate time is valid within 10-minute feeding window (5 min before and after)
+    digitalWrite(9, HIGH);  // GREEN ON == Sensors Hot!
+    digitalWrite(8, LOW);   // RED OFF
 
-    if (foodSensorVal == HIGH && !foodDispensed) {   // check food being dispensed for first time
-      // turn off sensor indicator LEDs so foodLED and catLED are more pronounced
+    // check for first sensor trip during this feed window
+    if (foodSensorVal == HIGH && !foodDispensed) {
+      // disable (RED,GREEN) sensor LEDs so 
+      // foodLED (YELLOW) and catLED (BLUE) are more pronounced
       digitalWrite(9, LOW);
       digitalWrite(8, LOW);
 
-      digitalWrite(foodLED, HIGH);             // turn foodLED ON
-      delay(100);                              // delay 100 milliseconds
+      digitalWrite(foodLED, HIGH);              // turn foodLED (YELLOW) ON
+      delay(60);                                // delay 60 milliseconds
 
-      if (foodSensorState == LOW) {
+      if (foodSensorState == LOW) {             // verify new sensor trip event
         Serial.println("Motion Detected on Food Sensor!");
 
         foodDispensed = true;
 
-        foodTime = millis();                  // Capture current time (used later for diff)
+        foodTime = millis();                    // Capture current time (used later for diff)
 
-        foodSensorState = HIGH;                // update foodSensorState to HIGH
+        foodSensorState = HIGH;                 // update foodSensorState to HIGH
       }
     } else {
-      digitalWrite(foodLED, LOW);            // turn foodLED OFF
+      digitalWrite(foodLED, LOW);               // turn foodLED (YELLOW) OFF
 
-      delay(100);                            // delay 200 milliseconds
+      delay(60);                                // delay 60 milliseconds
 
       if (foodSensorState == HIGH) {
-        //      Serial.println("Food Sensor Motion stopped!");
-        foodSensorState = LOW;               // update foodSensorState to LOW
+        foodSensorState = LOW;                  // update foodSensorState to LOW
       }
     }
 
-    // check catSensor motion and food dispensed
+    // check catSensor trip after food has begun dispensing
     if (catSensorVal == HIGH && foodDispensed) {
-      digitalWrite(catLED, HIGH);            // turn catLED ON
+      digitalWrite(catLED, HIGH);               // turn catLED (BLUE) ON
 
-      delay(100);                            // delay 100 milliseconds
+      delay(60);                                // delay 60 milliseconds
 
-      if (catSensorState == LOW) {
+      if (catSensorState == LOW) {              // verify new sensor trip event
 
-        Write_SDcard((millis() - foodTime));  // Write split time SD
+        Write_SDcard((millis() - foodTime));    // Write split time SD
 
-        catSensorState = HIGH;               // update catSensorState to HIGH
+        catSensorState = HIGH;                  // update catSensorState to HIGH
       }
     } else {
-      digitalWrite(catLED, LOW);             // turn catLED OFF
+      digitalWrite(catLED, LOW);                // turn catLED (BLUE) OFF
 
-      delay(100);                            // delay 200 milliseconds
+      delay(60);                                // delay 60 milliseconds
 
       if (catSensorState == HIGH) {
-        catSensorState = LOW;                // update catSensorState to LOW
+        catSensorState = LOW;                   // update catSensorState to LOW
 
-        foodDispensed = false;               // reset foodDispensed
+        // reset circuit for next feeding window
+        foodDispensed = false;
+        foodSensorVal = LOW;
+        foodSensorState = LOW;                  
 
-        digitalWrite(8, HIGH);               // Set RED LED to HIGH to indicate sensors disabled
+        // Set RED LED to HIGH to indicate sensors disabled
+        // This may be redundant due to else statement code on line 208
+        digitalWrite(8, HIGH);                  
 
-        // Pause program for 30 minutes to avoid multiple writes
+        // Pause program for 30 minutes to avoid multiple SD writes during this feed window
         delay(1800000);
 
       }
@@ -201,8 +204,8 @@ void loop() {
     }
 
   } else {
-    digitalWrite(9, LOW);   // GREEN
-    digitalWrite(8, HIGH);  // RED
+    digitalWrite(9, LOW);   // GREEN OFF
+    digitalWrite(8, HIGH);  // RED ON == Sensors Blocking
 
   }
 
@@ -211,11 +214,14 @@ void loop() {
 /*****************************************************************************************************
    timeIsValid
     - This function is used to prevent false data entry by checking current time against
-        set times when his food is dispensed (6:15 & 18:15)
-    - Reasons: Juno likes to lick his bowl when he's hungry (all the time)
-        and his food bowl is near the Roomba dock.
+        set 'feeding window' times. His food is dispensed at 6:15 & 18:15, so sensors
+        are only watched for five minutes prior and after each (6:10-6:20, 18:10-18:20)
+    - Reasons: 
+      - Juno likes to lick his bowl when he's hungry (all the time)
+      - Food bowl is near the Roomba dock and, despite numerous attempts to program it,
+          that thing has a mind of its own!
  *****************************************************************************************************/
-bool timeIsValid() {
+bool feedingWindow() {
 
   int hourNow = rtc.getTime().hour;         // Get current hour
   int minuteNow = rtc.getTime().min;        // Get current minute
@@ -232,17 +238,16 @@ bool timeIsValid() {
 
 }
 
-
 /*****************************************************************************************************
    Initialize_RTC
     - Initialize the RTC object
-    - Set date, if needed
+    - Set date, if necessary
  *****************************************************************************************************/
 void Initialize_RTC() {
 
   rtc.begin();           // Initialize the rtc object
 
-  //#### The following lines can be [un]commented to set the current date and time###
+  //#### The following lines can be [un]commented to set the current date and time ###
 
   rtc.setTime(11, 30, 00);     // Set the time (HH:mm:ss) (24hr format)
 
@@ -266,7 +271,7 @@ void Initialize_RTC() {
  *****************************************************************************************************/
 void Initialize_SDcard() {
 
-  // check if the card is present and can be initialized:
+  // Check if the card is present and can be initialized:
   if (!SD.begin(chipSelect)) {
 
     Serial.println("Card failed, or not present");
@@ -283,7 +288,7 @@ void Initialize_SDcard() {
 
   }
 
-  // open the file. (note: only one file can be open at a time,
+  // Open the file. (note: only one file can be open at a time,
 
   // so you have to close this one before opening another).
 
@@ -304,12 +309,10 @@ void Initialize_SDcard() {
 
 /*****************************************************************************************************
    Write_SDcard
-    - whichSensor is used to indicate if writing data about foodSensor or catSensor
-    - isFood determines whether '0' or catTime-foodTime (in millis()) is written to CSV
+    - timeDiff is difference (in ms) between foodSensor and catSensor trips
     - Open the file on SD (if available)
-    - Write date,whichSensor,currentTime & splitTime to CSV
+    - Write date,currentTime & splitTime to CSV
  *****************************************************************************************************/
-// void Write_SDcard(long foodDropTime) {
 void Write_SDcard(unsigned long timeDiff) {
 
   // open the file. note that only one file can be open at a time,
