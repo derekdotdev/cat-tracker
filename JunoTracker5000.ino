@@ -114,7 +114,6 @@ void setup() {
   delay(4000);                   // wait 4 seconds
   digitalWrite(9, LOW);          // turn off LED to indicate setup() done
 
-
 }
 
 /*****************************************************************************************************
@@ -149,7 +148,7 @@ void loop() {
       delay(60);                                // delay 60 milliseconds
 
       if (foodSensorState == LOW) {             // verify new sensor trip event
-        Serial.println("Motion Detected on Food Sensor!");
+        Serial.println("Food has started dispensing!");
 
         foodDispensed = true;
 
@@ -249,15 +248,12 @@ void Initialize_RTC() {
 
   //#### The following lines can be [un]commented to set the current date and time ###
 
-  rtc.setTime(11, 30, 00);     // Set the time (HH:mm:ss) (24hr format)
+  rtc.setTime(16, 30, 15);     // Set the time (HH:mm:ss) (24hr format)
 
   Serial.print("     Time read from rtc: ");
   Serial.print(rtc.getTimeStr());
 
-
-  Serial.print("\nSetting date to 5/23/2022: ");
-
-  rtc.setDate(23, 05, 2022);   // Set the date to May 5th, 2022
+  rtc.setDate(26, 05, 2022);   // Set the date to May 26th, 2022
 
   Serial.print("   Date read from rtc: ");
   Serial.print(rtc.getDateStr());
