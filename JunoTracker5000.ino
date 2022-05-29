@@ -131,21 +131,24 @@ void loop() {
 
   foodSensorVal = digitalRead(foodSensor);   // read foodSensor value
   catSensorVal = digitalRead(catSensor);     // read catSensor value
-
+  
   if (feedingWindow()) {
     // Indicate time is valid within 10-minute feeding window (5 min before and after)
-    digitalWrite(9, HIGH);  // GREEN ON == Sensors Hot!
-    digitalWrite(8, LOW);   // RED OFF
+    // 
+    if (!foodDispensed) {
+      digitalWrite(9, HIGH);  // GREEN ON == Sensors Hot!
+      digitalWrite(8, LOW);   // RED OFF
+    }
 
     // check for first sensor trip during this feed window
     if (foodSensorVal == HIGH && !foodDispensed) {
       // disable (RED,GREEN) sensor LEDs so 
       // foodLED (YELLOW) and catLED (BLUE) are more pronounced
       digitalWrite(9, LOW);
-      digitalWrite(8, LOW);
+      digitalWrite(8, LOW);  
 
       digitalWrite(foodLED, HIGH);              // turn foodLED (YELLOW) ON
-      delay(60);                                // delay 60 milliseconds
+      delay(150);                                // delay 150 milliseconds
 
       if (foodSensorState == LOW) {             // verify new sensor trip event
         Serial.println("Food has started dispensing!");
@@ -159,7 +162,7 @@ void loop() {
     } else {
       digitalWrite(foodLED, LOW);               // turn foodLED (YELLOW) OFF
 
-      delay(60);                                // delay 60 milliseconds
+      delay(150);                                // delay 150 milliseconds
 
       if (foodSensorState == HIGH) {
         foodSensorState = LOW;                  // update foodSensorState to LOW
@@ -170,18 +173,18 @@ void loop() {
     if (catSensorVal == HIGH && foodDispensed) {
       digitalWrite(catLED, HIGH);               // turn catLED (BLUE) ON
 
-      delay(60);                                // delay 60 milliseconds
+      delay(150);                                // delay 150 milliseconds
 
       if (catSensorState == LOW) {              // verify new sensor trip event
 
-        Write_SDcard((millis() - foodTime));    // Write split time SD
+        Write_SDcard((millis() - foodTime + 300));    // Write split time SD (plus LED delay times)
 
         catSensorState = HIGH;                  // update catSensorState to HIGH
       }
     } else {
       digitalWrite(catLED, LOW);                // turn catLED (BLUE) OFF
 
-      delay(60);                                // delay 60 milliseconds
+      delay(150);                                // delay 150 milliseconds
 
       if (catSensorState == HIGH) {
         catSensorState = LOW;                   // update catSensorState to LOW
@@ -205,7 +208,6 @@ void loop() {
   } else {
     digitalWrite(9, LOW);   // GREEN OFF
     digitalWrite(8, HIGH);  // RED ON == Sensors Blocking
-
   }
 
 }
@@ -248,7 +250,7 @@ void Initialize_RTC() {
 
   //#### The following lines can be [un]commented to set the current date and time ###
 
-  rtc.setTime(16, 30, 15);     // Set the time (HH:mm:ss) (24hr format)
+  rtc.setTime(9, 50, 15);     // Set the time (HH:mm:ss) (24hr format)
 
   Serial.print("     Time read from rtc: ");
   Serial.print(rtc.getTimeStr());
