@@ -3,6 +3,8 @@
 
 The task assigned for my senior project is to put together a small data collection system and visualize the data in a graphical manner.
 
+Here's the [final presentation of the project](https://vimeo.com/726744707)
+
 When brainstorming ideas one evening, my 16-pound cat Juno came in to let me know he was hungry. 
 
 Now, I cut myself out of that equation *years ago* by getting him an auto-feeder, but he still insists on letting me know when it's dinner time.
